@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '../../../lib/supabaseClient'
+import { scrapeCompetitorMentions } from '../../../services/scraper/index'
 
 // Observable Implementation: Structured logging for API operations
-const logApiOperation = (operation: string, data: any, success: boolean, error?: string) => {
+const logApiOperation = (operation: string, data: Record<string, unknown>, success: boolean, error?: string) => {
   console.log(JSON.stringify({
     timestamp: new Date().toISOString(),
     operation: `api_${operation}`,
@@ -74,59 +75,99 @@ export async function POST(request: NextRequest) {
 
     logApiOperation('job_validated', { jobId, competitor }, true)
 
-    // Invoke Supabase Edge Function
-    const edgeFunctionUrl = `${process.env.SUPABASE_URL}/functions/v1/scrape-leads`
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    // Update job status to 'running'
+    await supabase
+      .from('scrape_jobs')
+      .update({ state: 'running' })
+      .eq('id', jobId)
 
-    if (!edgeFunctionUrl || !serviceRoleKey) {
-      logApiOperation('config_error', { hasUrl: !!edgeFunctionUrl, hasKey: !!serviceRoleKey }, false)
-      return NextResponse.json(
-        { error: 'Server configuration error' },
-        { status: 500 }
-      )
+    logApiOperation('scraping_start', { jobId, competitor }, true)
+
+    // Use local scraper service directly
+    const scrapingResult = await scrapeCompetitorMentions(competitor.trim(), 15)
+
+    if (scrapingResult.errors.length > 0) {
+      logApiOperation('scraping_errors', { jobId, errors: scrapingResult.errors }, false)
     }
 
-    // Call the Edge Function
-    logApiOperation('edge_function_call', { jobId, competitor }, true)
+    // Save companies and leads to database
+    let savedCompanies = 0
+    let savedLeads = 0
 
-    const edgeResponse = await fetch(edgeFunctionUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${serviceRoleKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        jobId,
-        competitor: competitor.trim()
+    // Process companies first
+    for (const company of scrapingResult.companies) {
+      try {
+        const { data: existingCompany } = await supabase
+          .from('companies')
+          .select('id')
+          .eq('domain', company.domain)
+          .single()
+
+        if (!existingCompany) {
+          await supabase
+            .from('companies')
+            .insert({
+              domain: company.domain,
+              name: company.name
+            })
+          savedCompanies++
+        }
+      } catch (error) {
+        logApiOperation('company_save_failed', { domain: company.domain }, false, error instanceof Error ? error.message : 'Unknown error')
+      }
+    }
+
+    // Process leads
+    for (const lead of scrapingResult.leads) {
+      try {
+        // Get company ID for this lead
+        const { data: company } = await supabase
+          .from('companies')
+          .select('id')
+          .eq('domain', lead.domain)
+          .single()
+
+        if (company) {
+          // Check if lead already exists
+          const { data: existingLead } = await supabase
+            .from('leads')
+            .select('id')
+            .eq('company_id', company.id)
+            .eq('contact_email', lead.email)
+            .single()
+
+          if (!existingLead) {
+            await supabase
+              .from('leads')
+              .insert({
+                company_id: company.id,
+                contact_name: lead.name || null,
+                contact_email: lead.email,
+                source_url: lead.sourceUrl,
+                status: 'new'
+              })
+            savedLeads++
+          }
+        }
+      } catch (error) {
+        logApiOperation('lead_save_failed', { email: lead.email }, false, error instanceof Error ? error.message : 'Unknown error')
+      }
+    }
+
+    // Update job status to 'done'
+    await supabase
+      .from('scrape_jobs')
+      .update({ 
+        state: 'done',
+        completed_at: new Date().toISOString()
       })
-    })
+      .eq('id', jobId)
 
-    if (!edgeResponse.ok) {
-      const errorText = await edgeResponse.text()
-      logApiOperation('edge_function_failed', { jobId, status: edgeResponse.status, error: errorText }, false)
-      
-      // Update job status to error
-      await supabase
-        .from('scrape_jobs')
-        .update({ 
-          state: 'error',
-          completed_at: new Date().toISOString()
-        })
-        .eq('id', jobId)
-
-      return NextResponse.json(
-        { error: 'Failed to process scraping job', details: errorText },
-        { status: 500 }
-      )
-    }
-
-    const edgeResult = await edgeResponse.json()
-    
     logApiOperation('scrape_complete', { 
       jobId, 
       competitor,
-      leadsFound: edgeResult.results?.savedLeads || 0,
-      companiesFound: edgeResult.results?.savedCompanies || 0
+      leadsFound: savedLeads,
+      companiesFound: savedCompanies
     }, true)
 
     return NextResponse.json({
@@ -134,12 +175,37 @@ export async function POST(request: NextRequest) {
       message: 'Scraping job completed successfully',
       jobId,
       competitor,
-      results: edgeResult.results
+      results: {
+        totalSearched: scrapingResult.totalSearched,
+        totalLeadsFound: scrapingResult.totalLeadsFound,
+        savedCompanies,
+        savedLeads,
+        errors: scrapingResult.errors
+      }
     })
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     logApiOperation('api_error', {}, false, errorMessage)
+
+    // Try to update job status to 'error' if we can extract jobId
+    try {
+      const body = await request.clone().json()
+      const { jobId } = body
+      
+      if (jobId) {
+        const supabase = createServerSupabaseClient()
+        await supabase
+          .from('scrape_jobs')
+          .update({ 
+            state: 'error',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', jobId)
+      }
+         } catch {
+       // Ignore update errors
+     }
 
     return NextResponse.json(
       { error: 'Internal server error', message: errorMessage },

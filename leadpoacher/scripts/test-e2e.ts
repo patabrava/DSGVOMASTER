@@ -99,7 +99,7 @@ async function testJobProgressTracking() {
       
       // Job should remain in a valid state
       const validStates = ['queued', 'running', 'done', 'error']
-      if (!validStates.includes(currentJob.state)) {
+      if (!currentJob.state || !validStates.includes(currentJob.state)) {
         throw new Error(`Invalid job state: ${currentJob.state}`)
       }
     }
