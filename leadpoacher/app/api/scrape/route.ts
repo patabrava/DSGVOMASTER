@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     logApiOperation('scraping_start', { jobId, competitor }, true)
 
     // Use new privacy page scraper with extensive domain coverage for comprehensive lead discovery
-    const scrapingResult = await scrapeCompetitorMentions(competitor.trim(), 500)
+    const scrapingResult = await scrapeCompetitorMentions(competitor.trim(), 500, jobId)
 
     if (scrapingResult.errors.length > 0) {
       logApiOperation('scraping_errors', { jobId, errors: scrapingResult.errors.slice(0, 5) }, false)
