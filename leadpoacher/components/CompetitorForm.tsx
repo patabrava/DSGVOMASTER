@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createScrapeJob } from '../lib/actions'
 
 interface CompetitorFormProps {
   onSubmit?: (competitorName: string) => void
@@ -10,6 +11,7 @@ export default function CompetitorForm({ onSubmit }: CompetitorFormProps) {
   const [competitorName, setCompetitorName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
 
   const validateCompetitorName = (name: string): string => {
     if (!name.trim()) {
@@ -37,14 +39,26 @@ export default function CompetitorForm({ onSubmit }: CompetitorFormProps) {
     }
     
     setError('')
+    setSuccessMessage('')
     setIsLoading(true)
     
     try {
-      if (onSubmit) {
-        await onSubmit(competitorName.trim())
+      // Create scrape job using server action
+      const result = await createScrapeJob({
+        competitor: competitorName.trim()
+      })
+      
+      if (result.error) {
+        setError(result.error)
+      } else {
+        setSuccessMessage(`✅ Started researching mentions of "${competitorName.trim()}"`)
+        setCompetitorName('')
+        
+        // Call optional onSubmit prop for compatibility
+        if (onSubmit) {
+          await onSubmit(competitorName.trim())
+        }
       }
-      // Reset form on success
-      setCompetitorName('')
     } catch {
       setError('Failed to start competitor research. Please try again.')
     } finally {
@@ -68,6 +82,7 @@ export default function CompetitorForm({ onSubmit }: CompetitorFormProps) {
             onChange={(e) => {
               setCompetitorName(e.target.value)
               if (error) setError('') // Clear error on input
+              if (successMessage) setSuccessMessage('') // Clear success message on input
             }}
             placeholder="Acme Corporation"
             className="w-full p-3 bg-light border-2 border-dark focus:outline-none focus:ring-4 focus:ring-primary focus:border-dark transition-all duration-150"
@@ -76,6 +91,11 @@ export default function CompetitorForm({ onSubmit }: CompetitorFormProps) {
           {error && (
             <p className="mt-2 text-sm font-bold text-dark bg-primary p-2 border-2 border-dark">
               ⚠️ {error}
+            </p>
+          )}
+          {successMessage && (
+            <p className="mt-2 text-sm font-bold text-dark bg-secondary p-2 border-2 border-dark">
+              {successMessage}
             </p>
           )}
         </div>
