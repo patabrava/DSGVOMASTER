@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+/* Google Fonts for the Neo-Brutalist Vibe */
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;700&family=IBM+Plex+Mono&display=swap');
+
+/* Custom CSS Variables */
+:root {
+  --primary: #F7FF00; /* Electric Yellow */
+  --secondary: #0052FF; /* Strong Blue */
+  --dark: #111111; /* Off-black */
+  --light: #FFFFFF;
+  --neutral: #F2F2F2; /* Light gray background */
+}
+
+/* Base Styles */
+body {
+  background: var(--neutral);
+  color: var(--dark);
+  font-family: 'Inter', sans-serif;
+  scroll-behavior: smooth;
+}
+
+/* Neo-Brutalist Button Base Styles */
+.btn {
+  @apply font-bold py-3 px-8 border-2 transition-all duration-150;
+  border-color: var(--dark);
+  box-shadow: 4px 4px 0px var(--dark);
+}
+
+.btn:hover {
+  box-shadow: none;
+  transform: translate(4px, 4px);
+}
+
+.btn-primary {
+  background-color: var(--primary);
+  color: var(--dark);
+}
+
+.btn-primary:hover {
+  background-color: var(--dark);
+  color: var(--primary);
+}
+
+.btn-secondary {
+  background-color: var(--secondary);
+  color: var(--light);
+}
+
+.btn-secondary:hover {
+  background-color: var(--dark);
+  color: var(--secondary);
+}

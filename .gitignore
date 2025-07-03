@@ -1,0 +1,18 @@
+# YAML files - ignore all YAML configuration files
+*.yaml
+*.yml
+
+# IDE and editor files
+.cursor/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp 
