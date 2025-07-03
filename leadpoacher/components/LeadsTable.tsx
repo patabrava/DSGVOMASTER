@@ -1,9 +1,9 @@
 'use client'
 
-import { Lead } from '../lib/dbSchema'
+import { LeadWithCompany } from '../hooks/useLeads'
 
 interface LeadsTableProps {
-  leads?: Lead[]
+  leads?: LeadWithCompany[]
   isLoading?: boolean
   competitorName?: string
 }
@@ -81,20 +81,23 @@ export default function LeadsTable({ leads = [], isLoading = false, competitorNa
                   </div>
                 </td>
                 <td className="p-4">
-                  <a 
-                    href={`mailto:${lead.contact_email}`}
-                    className="text-secondary hover:underline"
-                  >
-                    {lead.contact_email}
-                  </a>
+                  {lead.contact_email ? (
+                    <a 
+                      href={`mailto:${lead.contact_email}`}
+                      className="text-secondary hover:underline"
+                    >
+                      {lead.contact_email}
+                    </a>
+                  ) : (
+                    <span className="text-gray-500">No email</span>
+                  )}
                 </td>
                 <td className="p-4">
                   <div className="text-sm font-semibold">
-                    {/* This will be populated from the companies table via company_id */}
-                    Company Name
+                    {lead.company?.name || 'Unknown Company'}
                   </div>
                   <div className="text-xs text-gray-600">
-                    mentions competitor
+                    {lead.company?.domain}
                   </div>
                 </td>
                 <td className="p-4">
@@ -144,7 +147,7 @@ export default function LeadsTable({ leads = [], isLoading = false, competitorNa
                   {lead.contact_name || 'Unknown'}
                 </h4>
                 <p className="text-sm text-gray-600">
-                  at Company Name
+                  at {lead.company?.name || 'Unknown Company'}
                 </p>
               </div>
               <span className={`font-mono text-xs py-1 px-2 border border-dark ${
@@ -159,9 +162,13 @@ export default function LeadsTable({ leads = [], isLoading = false, competitorNa
             <div className="text-sm space-y-1">
               <div>
                 <span className="font-bold">Email: </span>
-                <a href={`mailto:${lead.contact_email}`} className="text-secondary">
-                  {lead.contact_email}
-                </a>
+                {lead.contact_email ? (
+                  <a href={`mailto:${lead.contact_email}`} className="text-secondary">
+                    {lead.contact_email}
+                  </a>
+                ) : (
+                  <span className="text-gray-500">No email</span>
+                )}
               </div>
               {lead.source_url && (
                 <div>

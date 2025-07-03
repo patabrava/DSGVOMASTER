@@ -50,8 +50,31 @@ export default function CompetitorForm({ onSubmit }: CompetitorFormProps) {
       
       if (result.error) {
         setError(result.error)
-      } else {
-        setSuccessMessage(`✅ Started researching mentions of "${competitorName.trim()}"`)
+      } else if (result.data) {
+        // Job created successfully, now trigger the scraping
+        try {
+          const scrapeResponse = await fetch('/api/scrape', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              jobId: result.data.id,
+              competitor: competitorName.trim()
+            })
+          })
+          
+          if (scrapeResponse.ok) {
+            const scrapeResult = await scrapeResponse.json()
+            setSuccessMessage(`✅ Research complete! Found ${scrapeResult.results?.savedLeads || 0} leads from ${scrapeResult.results?.savedCompanies || 0} companies mentioning "${competitorName.trim()}"`)
+          } else {
+            const errorData = await scrapeResponse.json()
+            setError(`Scraping failed: ${errorData.error || 'Unknown error'}`)
+          }
+        } catch (scrapeError) {
+          setError('Failed to process scraping - job was created but processing failed')
+        }
+        
         setCompetitorName('')
         
         // Call optional onSubmit prop for compatibility
