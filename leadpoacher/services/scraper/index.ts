@@ -48,11 +48,57 @@ const logScraperOperation = (operation: string, data: any, success: boolean, err
   }))
 }
 
+// Enhanced Domain Discovery Infrastructure - Phase 1
+// Following MONOCODE Observable Implementation principles
+
+// New interfaces for enhanced domain discovery
+interface DomainSource {
+  source: 'static' | 'api' | 'registry' | 'crawl' | 'directory'
+  discoveredAt: Date
+  confidence: number
+  metadata?: Record<string, any>
+}
+
+interface EnhancedDomain {
+  domain: string
+  sources: DomainSource[]
+  lastValidated?: Date
+  isActive: boolean
+  businessType?: string
+  country?: string
+  language?: string
+}
+
+interface DomainDiscoveryConfig {
+  enableStaticList: boolean
+  enableApiDiscovery: boolean
+  enableRegistryLookup: boolean
+  enableWebCrawling: boolean
+  enableDirectorySearch: boolean
+  maxDomainsPerSource: number
+  rateLimitDelayMs: number
+}
+
+interface DomainDiscoveryResult {
+  domains: string[]
+  sources: { [key: string]: number }
+  totalDiscovered: number
+  processingTimeMs: number
+  errors: string[]
+  statistics: {
+    staticCount: number
+    apiCount: number
+    registryCount: number
+    crawlCount: number
+    directoryCount: number
+  }
+}
+
 /**
- * Domain Discovery Service - Get list of domains to check
- * Phase 1: Use curated list of business domains
+ * Enhanced Domain Discovery Service - Multi-channel discovery infrastructure
+ * Phase 1: Foundation with API integration capabilities
  */
-class DomainDiscoveryService {
+class EnhancedDomainDiscoveryService {
   private static businessDomains = [
     // Major German Companies - DAX 40 and major corporations
     'sap.com', 'siemens.com', 'bmw.com', 'volkswagen.com', 'adidas.com',
@@ -223,22 +269,246 @@ class DomainDiscoveryService {
     'sea.com', 'rakuten.com', 'naver.com', 'kakao.com', 'line.me'
   ]
 
-  static async getDomainsToCheck(maxDomains: number = 500): Promise<string[]> {
+  private static defaultConfig: DomainDiscoveryConfig = {
+    enableStaticList: true,
+    enableApiDiscovery: true,
+    enableRegistryLookup: false, // Enabled in Phase 3
+    enableWebCrawling: true,     // ✅ ENABLED in Phase 2
+    enableDirectorySearch: false, // Enabled in Phase 3
+    maxDomainsPerSource: 1000,
+    rateLimitDelayMs: 100
+  }
+
+  // Phase 1: Static domain discovery with infrastructure for future expansion
+  static async discoverDomains(
+    maxDomains: number = 500, 
+    config: Partial<DomainDiscoveryConfig> = {}
+  ): Promise<DomainDiscoveryResult> {
+    const startTime = Date.now()
+    const finalConfig = { ...this.defaultConfig, ...config }
+    const result: DomainDiscoveryResult = {
+      domains: [],
+      sources: {},
+      totalDiscovered: 0,
+      processingTimeMs: 0,
+      errors: [],
+      statistics: {
+        staticCount: 0,
+        apiCount: 0,
+        registryCount: 0,
+        crawlCount: 0,
+        directoryCount: 0
+      }
+    }
+
     try {
-      logScraperOperation('domain_discovery_start', { maxDomains }, true)
+      logScraperOperation('enhanced_domain_discovery_start', { 
+        maxDomains, 
+        config: finalConfig 
+      }, true)
+
+      const domainSet = new Set<string>()
+
+      // Discovery Channel 1: Static domain list
+      if (finalConfig.enableStaticList) {
+        const staticDomains = await this.getStaticDomains(finalConfig.maxDomainsPerSource)
+        staticDomains.forEach(domain => domainSet.add(domain))
+        result.statistics.staticCount = staticDomains.length
+        result.sources['static'] = staticDomains.length
+        
+        logScraperOperation('static_domain_discovery', { 
+          domainsFound: staticDomains.length 
+        }, true)
+      }
+
+      // Discovery Channel 2: API-based discovery (Phase 1 foundation)
+      if (finalConfig.enableApiDiscovery) {
+        try {
+          const apiDomains = await this.discoverFromAPIs(finalConfig.maxDomainsPerSource)
+          apiDomains.forEach(domain => domainSet.add(domain))
+          result.statistics.apiCount = apiDomains.length
+          result.sources['api'] = apiDomains.length
+          
+          logScraperOperation('api_domain_discovery', { 
+            domainsFound: apiDomains.length 
+          }, true)
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'API discovery failed'
+          result.errors.push(`API Discovery: ${errorMsg}`)
+          logScraperOperation('api_domain_discovery_failed', {}, false, errorMsg)
+        }
+      }
+
+      // Discovery Channel 3: Web Crawling (Phase 2 - NOW IMPLEMENTED)
+      if (finalConfig.enableWebCrawling) {
+        try {
+          const crawlDomains = await this.discoverFromWebCrawling(finalConfig.maxDomainsPerSource)
+          crawlDomains.forEach(domain => domainSet.add(domain))
+          result.statistics.crawlCount = crawlDomains.length
+          result.sources['crawl'] = crawlDomains.length
+          
+          logScraperOperation('web_crawling_discovery', { 
+            domainsFound: crawlDomains.length 
+          }, true)
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'Web crawling discovery failed'
+          result.errors.push(`Web Crawling: ${errorMsg}`)
+          logScraperOperation('web_crawling_discovery_failed', {}, false, errorMsg)
+        }
+      }
+
+      // Future channels (Phase 3)
+      if (finalConfig.enableRegistryLookup) {
+        // TODO: Implement registry lookup in Phase 3
+        logScraperOperation('registry_discovery_placeholder', { 
+          message: 'Registry lookup will be implemented in Phase 3' 
+        }, true)
+      }
+
+      if (finalConfig.enableDirectorySearch) {
+        // TODO: Implement directory search in Phase 3
+        logScraperOperation('directory_search_placeholder', { 
+          message: 'Directory search will be implemented in Phase 3' 
+        }, true)
+      }
+
+      // Convert set to array and limit to maxDomains
+      result.domains = Array.from(domainSet).slice(0, maxDomains)
+      result.totalDiscovered = result.domains.length
+      result.processingTimeMs = Date.now() - startTime
+
+      logScraperOperation('enhanced_domain_discovery_complete', {
+        totalDomains: result.totalDiscovered,
+        sources: result.sources,
+        processingTimeMs: result.processingTimeMs,
+        errors: result.errors.length
+      }, true)
+
+      return result
+
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Domain discovery failed'
+      result.errors.push(errorMsg)
+      result.processingTimeMs = Date.now() - startTime
       
-      // Phase 1: Return curated list (now expanded to 400+ domains)
-      // TODO Phase 2: Integrate with domain APIs or web crawling
-      const domains = this.businessDomains.slice(0, maxDomains)
+      logScraperOperation('enhanced_domain_discovery_failed', { 
+        maxDomains, 
+        config: finalConfig 
+      }, false, errorMsg)
       
-      logScraperOperation('domain_discovery_complete', { domainsFound: domains.length }, true)
+      return result
+    }
+  }
+
+  // Channel 1: Static domain list
+  private static async getStaticDomains(maxDomains: number): Promise<string[]> {
+    // Add rate limiting to simulate real-world conditions
+    await this.rateLimitDelay(50)
+    return this.businessDomains.slice(0, maxDomains)
+  }
+
+  // Channel 2: API-based discovery (Phase 1 foundation)
+  private static async discoverFromAPIs(maxDomains: number): Promise<string[]> {
+    const apiDomains: string[] = []
+    
+    try {
+      // Phase 1: Mock API responses for testing infrastructure
+      // Phase 3: Implement real API integrations
+      
+      logScraperOperation('api_discovery_start', { maxDomains }, true)
+      
+      // Simulate API calls with rate limiting
+      await this.rateLimitDelay(200)
+      
+      // Mock German startup/company domains from hypothetical APIs
+      // Phase 3: Replace with real API calls to:
+      // - OpenCorporates API
+      // - Hunter.io Company Search  
+      // - Clearbit Company API
+      // - SecurityTrails Domain Intelligence
+      const mockApiDomains = [
+        'flixbus.com', 'outfittery.de', 'wundertax.de', 'personio.de',
+        'contentful.com', 'ramp.de', 'pitch.com', 'mambu.com',
+        'forto.com', 'tier.app', 'cluno.com', 'dance.com',
+        'gorillas.io', 'flink.com', 'picnic.app', 'getir.com',
+        'shopify.de', 'stripe.com', 'twilio.com', 'sendgrid.com',
+        'ecosia.org', 'blinkist.com', 'mindmeister.com', 'wunderlist.com',
+        'soundcloud.com', 'eyeem.com', 'adjust.com', 'researchgate.net',
+        'thermomix.de', 'mytaxi.com', 'foodpanda.de', 'lieferando.de'
+      ]
+      
+      apiDomains.push(...mockApiDomains.slice(0, maxDomains))
+      
+      logScraperOperation('api_discovery_mock', { 
+        domainsFound: apiDomains.length,
+        note: 'Using mock data for Phase 1 infrastructure testing'
+      }, true)
+      
+      return apiDomains
+      
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'API discovery error'
+      logScraperOperation('api_discovery_error', { maxDomains }, false, errorMsg)
+      return []
+    }
+  }
+
+  // Channel 3: Web crawling discovery (Phase 2 implementation)
+  private static async discoverFromWebCrawling(maxDomains: number): Promise<string[]> {
+    try {
+      logScraperOperation('web_crawling_discovery_start', { maxDomains }, true)
+      
+      // Use the German Business Crawler to discover domains
+      const crawlResults = await GermanBusinessCrawler.crawlForGermanBusinessDomains(
+        maxDomains,
+        {
+          maxDomainsPerSeed: Math.ceil(maxDomains / 10), // Distribute across seeds
+          crawlDelayMs: 2000, // More conservative for discovery
+          respectRobotsTxt: true,
+          germanOnly: true,
+          businessOnly: true
+        }
+      )
+      
+      // Aggregate all discovered domains from all seeds
+      const discoveredDomains = new Set<string>()
+      crawlResults.forEach(result => {
+        result.discoveredDomains.forEach((domain: string) => discoveredDomains.add(domain))
+      })
+      
+      const domains = Array.from(discoveredDomains).slice(0, maxDomains)
+      
+      logScraperOperation('web_crawling_discovery_complete', {
+        domainsFound: domains.length,
+        seedsProcessed: crawlResults.length,
+        totalExtracted: discoveredDomains.size
+      }, true)
+      
       return domains
       
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Domain discovery failed'
-      logScraperOperation('domain_discovery_failed', { maxDomains }, false, errorMsg)
+      const errorMsg = error instanceof Error ? error.message : 'Web crawling discovery error'
+      logScraperOperation('web_crawling_discovery_error', { maxDomains }, false, errorMsg)
       return []
     }
+  }
+
+  // Rate limiting utility
+  private static async rateLimitDelay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  // Backward compatibility method
+  static async getDomainsToCheck(maxDomains: number = 500): Promise<string[]> {
+    const result = await this.discoverDomains(maxDomains)
+    return result.domains
+  }
+}
+
+// Update the legacy class to use the enhanced service
+class DomainDiscoveryService {
+  static async getDomainsToCheck(maxDomains: number = 500): Promise<string[]> {
+    return EnhancedDomainDiscoveryService.getDomainsToCheck(maxDomains)
   }
 }
 
@@ -742,4 +1012,489 @@ export {
   // Legacy exports for compatibility
   searchCompetitorMentions,
   extractLeadsFromPage
+}
+
+// Phase 2: Web Crawling Engine Infrastructure
+// German Business Discovery through intelligent crawling
+
+interface CrawlSeed {
+  url: string
+  type: 'business_portal' | 'directory' | 'government' | 'association'
+  priority: number
+  lastCrawled?: Date
+}
+
+interface CrawlResult {
+  sourceUrl: string
+  discoveredDomains: string[]
+  businessIndicators: BusinessIndicator[]
+  processingTime: number
+  errors: string[]
+}
+
+interface BusinessIndicator {
+  domain: string
+  indicators: {
+    hasImpressum: boolean
+    hasGermanContent: boolean
+    hasBusinessKeywords: boolean
+    hasVATNumber: boolean
+    hasContactInfo: boolean
+    hasPrivacyPolicy: boolean
+  }
+  confidence: number
+  businessType?: string
+}
+
+interface CrawlConfig {
+  maxDepth: number
+  maxDomainsPerSeed: number
+  respectRobotsTxt: boolean
+  crawlDelayMs: number
+  userAgent: string
+  germanOnly: boolean
+  businessOnly: boolean
+}
+
+/**
+ * German Business Web Crawler - Phase 2 Implementation
+ * Intelligent discovery of German business domains through web crawling
+ */
+class GermanBusinessCrawler {
+  private static readonly GERMAN_BUSINESS_SEEDS: CrawlSeed[] = [
+    // German Business Portals
+    { url: 'https://www.unternehmensregister.de', type: 'government', priority: 10 },
+    { url: 'https://www.bundesanzeiger.de', type: 'government', priority: 10 },
+    { url: 'https://www.dihk.de', type: 'association', priority: 9 },
+    { url: 'https://www.bdi.eu', type: 'association', priority: 9 },
+    { url: 'https://www.gelbeseiten.de', type: 'directory', priority: 8 },
+    { url: 'https://www.wlw.de', type: 'business_portal', priority: 8 },
+    { url: 'https://www.firmenwissen.de', type: 'business_portal', priority: 7 },
+    { url: 'https://www.northdata.de', type: 'business_portal', priority: 7 },
+    
+    // Startup and Innovation Hubs
+    { url: 'https://www.berlin-startup.de', type: 'business_portal', priority: 6 },
+    { url: 'https://www.munich-startup.de', type: 'business_portal', priority: 6 },
+    { url: 'https://www.startup-map.de', type: 'business_portal', priority: 6 },
+    
+    // Industry Associations
+    { url: 'https://www.vdma.org', type: 'association', priority: 5 },
+    { url: 'https://www.zvei.org', type: 'association', priority: 5 },
+    { url: 'https://www.bitkom.org', type: 'association', priority: 5 },
+    
+    // Regional Business Directories
+    { url: 'https://www.ihk.de', type: 'association', priority: 4 },
+    { url: 'https://www.hwk.de', type: 'association', priority: 4 }
+  ]
+
+  private static readonly GERMAN_BUSINESS_KEYWORDS = [
+    'GmbH', 'AG', 'UG', 'KG', 'OHG', 'Unternehmen', 'Firma', 'Betrieb',
+    'Gesellschaft', 'Konzern', 'Holding', 'Service', 'Dienstleistung',
+    'Produktion', 'Hersteller', 'Anbieter', 'Lieferant', 'Partner'
+  ]
+
+  private static readonly GERMAN_CONTENT_INDICATORS = [
+    'Impressum', 'Datenschutz', 'AGB', 'Kontakt', 'Über uns',
+    'Unternehmen', 'Leistungen', 'Produkte', 'Service'
+  ]
+
+  private static defaultCrawlConfig: CrawlConfig = {
+    maxDepth: 2,
+    maxDomainsPerSeed: 100,
+    respectRobotsTxt: true,
+    crawlDelayMs: 1000,
+    userAgent: 'Mozilla/5.0 (compatible; LeadPoacher-Crawler/2.0; +https://leadpoacher.com/bot)',
+    germanOnly: true,
+    businessOnly: true
+  }
+
+  /**
+   * Discover German business domains through intelligent web crawling
+   */
+  static async crawlForGermanBusinessDomains(
+    maxDomains: number = 1000,
+    config: Partial<CrawlConfig> = {}
+  ): Promise<CrawlResult[]> {
+    const finalConfig = { ...this.defaultCrawlConfig, ...config }
+    const results: CrawlResult[] = []
+    const discoveredDomains = new Set<string>()
+
+    try {
+      logScraperOperation('web_crawling_start', { 
+        maxDomains, 
+        config: finalConfig,
+        seedCount: this.GERMAN_BUSINESS_SEEDS.length 
+      }, true)
+
+      // Sort seeds by priority
+      const prioritizedSeeds = [...this.GERMAN_BUSINESS_SEEDS]
+        .sort((a, b) => b.priority - a.priority)
+        .slice(0, 10) // Limit to top 10 seeds for Phase 2
+
+      for (const seed of prioritizedSeeds) {
+        if (discoveredDomains.size >= maxDomains) break
+
+        try {
+          logScraperOperation('seed_crawl_start', { 
+            seedUrl: seed.url, 
+            type: seed.type, 
+            priority: seed.priority 
+          }, true)
+
+          const seedResult = await this.crawlSeed(seed, finalConfig, maxDomains - discoveredDomains.size)
+          
+          // Add discovered domains to global set
+          seedResult.discoveredDomains.forEach(domain => discoveredDomains.add(domain))
+          
+          results.push(seedResult)
+          
+          logScraperOperation('seed_crawl_complete', { 
+            seedUrl: seed.url,
+            domainsDiscovered: seedResult.discoveredDomains.length,
+            totalDiscovered: discoveredDomains.size
+          }, true)
+
+          // Rate limiting between seeds
+          await this.crawlDelay(finalConfig.crawlDelayMs * 2)
+
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'Seed crawl failed'
+          logScraperOperation('seed_crawl_failed', { seedUrl: seed.url }, false, errorMsg)
+          
+          results.push({
+            sourceUrl: seed.url,
+            discoveredDomains: [],
+            businessIndicators: [],
+            processingTime: 0,
+            errors: [errorMsg]
+          })
+        }
+      }
+
+      logScraperOperation('web_crawling_complete', {
+        totalSeeds: prioritizedSeeds.length,
+        totalDomains: discoveredDomains.size,
+        resultsCount: results.length
+      }, true)
+
+      return results
+
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Web crawling failed'
+      logScraperOperation('web_crawling_failed', { maxDomains }, false, errorMsg)
+      return []
+    }
+  }
+
+  /**
+   * Crawl a single seed URL for German business domains
+   */
+  private static async crawlSeed(
+    seed: CrawlSeed, 
+    config: CrawlConfig, 
+    maxDomains: number
+  ): Promise<CrawlResult> {
+    const startTime = Date.now()
+    const result: CrawlResult = {
+      sourceUrl: seed.url,
+      discoveredDomains: [],
+      businessIndicators: [],
+      processingTime: 0,
+      errors: []
+    }
+
+    try {
+      // Check robots.txt if required
+      if (config.respectRobotsTxt) {
+        const robotsAllowed = await this.checkRobotsTxt(seed.url, config.userAgent)
+        if (!robotsAllowed) {
+          result.errors.push('Robots.txt disallows crawling')
+          return result
+        }
+      }
+
+      // Fetch seed page
+      await this.crawlDelay(config.crawlDelayMs)
+      
+      const response = await fetch(seed.url, {
+        headers: {
+          'User-Agent': config.userAgent,
+          'Accept': 'text/html,application/xhtml+xml'
+        },
+        signal: AbortSignal.timeout(15000)
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const html = await response.text()
+      
+      // Extract domains from the page
+      const extractedDomains = this.extractDomainsFromHTML(html, seed.url)
+      
+      // Filter for German business domains
+      const businessDomains: string[] = []
+      
+      for (const domain of extractedDomains) {
+        if (businessDomains.length >= maxDomains) break
+
+        try {
+          const businessIndicator = await this.analyzeBusinessDomain(domain, config)
+          
+          if (businessIndicator && businessIndicator.confidence >= 0.6) {
+            businessDomains.push(domain)
+            result.businessIndicators.push(businessIndicator)
+          }
+          
+          // Rate limiting between domain analyses
+          await this.crawlDelay(config.crawlDelayMs / 4)
+          
+        } catch (error) {
+          // Continue with next domain if analysis fails
+          continue
+        }
+      }
+
+      result.discoveredDomains = businessDomains
+      result.processingTime = Date.now() - startTime
+
+      logScraperOperation('seed_analysis_complete', {
+        seedUrl: seed.url,
+        extractedDomains: extractedDomains.length,
+        businessDomains: businessDomains.length,
+        avgConfidence: result.businessIndicators.length > 0 
+          ? result.businessIndicators.reduce((sum, bi) => sum + bi.confidence, 0) / result.businessIndicators.length 
+          : 0
+      }, true)
+
+      return result
+
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown crawl error'
+      result.errors.push(errorMsg)
+      result.processingTime = Date.now() - startTime
+      
+      logScraperOperation('seed_crawl_error', { seedUrl: seed.url }, false, errorMsg)
+      return result
+    }
+  }
+
+  /**
+   * Extract domains from HTML content
+   */
+  private static extractDomainsFromHTML(html: string, sourceUrl: string): string[] {
+    const domains = new Set<string>()
+    
+    try {
+      // Extract from href attributes
+      const linkRegex = /href=["']([^"']+)["']/gi
+      let match
+      
+      while ((match = linkRegex.exec(html)) !== null) {
+        try {
+          const url = new URL(match[1], sourceUrl)
+          
+          // Only include German domains or German-focused international domains
+          if (this.isGermanBusinessDomain(url.hostname)) {
+            domains.add(url.hostname.toLowerCase())
+          }
+        } catch {
+          // Invalid URL, skip
+          continue
+        }
+      }
+
+      // Extract from JavaScript and other content
+      const domainRegex = /(?:https?:\/\/)?([a-zA-Z0-9.-]+\.(?:de|com|org|net))/gi
+      
+      while ((match = domainRegex.exec(html)) !== null) {
+        const domain = match[1].toLowerCase()
+        if (this.isGermanBusinessDomain(domain)) {
+          domains.add(domain)
+        }
+      }
+
+      return Array.from(domains)
+        .filter(domain => domain !== new URL(sourceUrl).hostname) // Exclude source domain
+        .slice(0, 200) // Limit per page to prevent memory issues
+      
+    } catch (error) {
+      logScraperOperation('domain_extraction_error', { sourceUrl }, false, 
+        error instanceof Error ? error.message : 'Extraction failed')
+      return []
+    }
+  }
+
+  /**
+   * Check if domain appears to be a German business domain
+   */
+  private static isGermanBusinessDomain(domain: string): boolean {
+    // Primary filter: German TLD or German-focused domains
+    if (domain.endsWith('.de')) return true
+    
+    // Secondary filter: Known German business patterns
+    const germanPatterns = [
+      /gmbh/i, /deutschland/i, /german/i, /berlin/i, /münchen/i, /hamburg/i,
+      /koeln/i, /frankfurt/i, /dresden/i, /leipzig/i, /hannover/i
+    ]
+    
+    return germanPatterns.some(pattern => pattern.test(domain))
+  }
+
+  /**
+   * Analyze domain for German business indicators
+   */
+  private static async analyzeBusinessDomain(
+    domain: string, 
+    config: CrawlConfig
+  ): Promise<BusinessIndicator | null> {
+    try {
+      await this.crawlDelay(config.crawlDelayMs / 2)
+      
+      const response = await fetch(`https://${domain}`, {
+        headers: {
+          'User-Agent': config.userAgent,
+          'Accept': 'text/html,application/xhtml+xml'
+        },
+        signal: AbortSignal.timeout(10000)
+      })
+
+      if (!response.ok) {
+        return null
+      }
+
+      const html = await response.text()
+      const indicators = this.detectBusinessIndicators(html, domain)
+      
+      // Calculate confidence score
+      const confidence = this.calculateBusinessConfidence(indicators)
+      
+      if (confidence >= 0.3) { // Minimum threshold
+        return {
+          domain,
+          indicators,
+          confidence,
+          businessType: this.determineBusinessType(html)
+        }
+      }
+
+      return null
+
+    } catch (error) {
+      // Domain analysis failed, but don't log as error (expected for many domains)
+      return null
+    }
+  }
+
+  /**
+   * Detect German business indicators on a webpage
+   */
+  private static detectBusinessIndicators(html: string, domain: string) {
+    const lowerHtml = html.toLowerCase()
+    
+    return {
+      hasImpressum: /impressum|rechtliche hinweise/i.test(html),
+      hasGermanContent: this.GERMAN_CONTENT_INDICATORS.some(indicator => 
+        lowerHtml.includes(indicator.toLowerCase())
+      ),
+      hasBusinessKeywords: this.GERMAN_BUSINESS_KEYWORDS.some(keyword => 
+        lowerHtml.includes(keyword.toLowerCase())
+      ),
+      hasVATNumber: /ust[.-]?id[.-]?nr|umsatzsteuer|de\d{9}/i.test(html),
+      hasContactInfo: /kontakt|ansprechpartner|telefon|email/i.test(html),
+      hasPrivacyPolicy: /datenschutz|privacy|dsgvo/i.test(html)
+    }
+  }
+
+  /**
+   * Calculate business confidence score
+   */
+  private static calculateBusinessConfidence(indicators: any): number {
+    const weights = {
+      hasImpressum: 0.3,        // Strong indicator for German businesses
+      hasGermanContent: 0.2,    // Good indicator
+      hasBusinessKeywords: 0.2, // Good indicator
+      hasVATNumber: 0.15,       // Strong business indicator
+      hasContactInfo: 0.1,      // Basic requirement
+      hasPrivacyPolicy: 0.05    // Legal requirement
+    }
+
+    let score = 0
+    Object.entries(weights).forEach(([key, weight]) => {
+      if (indicators[key]) {
+        score += weight
+      }
+    })
+
+    return Math.min(1.0, score) // Cap at 1.0
+  }
+
+  /**
+   * Determine business type from content analysis
+   */
+  private static determineBusinessType(html: string): string {
+    const lowerHtml = html.toLowerCase()
+    
+    if (/software|it|tech|digital/i.test(html)) return 'technology'
+    if (/handel|shop|verkauf|e-commerce/i.test(html)) return 'retail'
+    if (/beratung|consulting|dienstleistung/i.test(html)) return 'consulting'
+    if (/produktion|fertigung|herstellung/i.test(html)) return 'manufacturing'
+    if (/gesundheit|medizin|pharma/i.test(html)) return 'healthcare'
+    if (/finanz|bank|versicherung/i.test(html)) return 'financial'
+    
+    return 'general'
+  }
+
+  /**
+   * Check robots.txt compliance
+   */
+  private static async checkRobotsTxt(url: string, userAgent: string): Promise<boolean> {
+    try {
+      const baseUrl = new URL(url).origin
+      const robotsUrl = `${baseUrl}/robots.txt`
+      
+      const response = await fetch(robotsUrl, {
+        signal: AbortSignal.timeout(5000)
+      })
+      
+      if (!response.ok) {
+        return true // If robots.txt doesn't exist, assume allowed
+      }
+      
+      const robotsText = await response.text()
+      
+      // Simple robots.txt parsing - check for Disallow: / for our user agent
+      const lines = robotsText.split('\n')
+      let isOurUserAgent = false
+      
+      for (const line of lines) {
+        const trimmed = line.trim()
+        
+        if (trimmed.startsWith('User-agent:')) {
+          const agent = trimmed.substring(11).trim()
+          isOurUserAgent = agent === '*' || userAgent.includes(agent)
+        }
+        
+        if (isOurUserAgent && trimmed.startsWith('Disallow:')) {
+          const disallowed = trimmed.substring(9).trim()
+          if (disallowed === '/' || disallowed === '') {
+            return false // Disallowed
+          }
+        }
+      }
+      
+      return true // Allowed by default
+      
+    } catch {
+      return true // If robots.txt check fails, assume allowed
+    }
+  }
+
+  /**
+   * Rate limiting delay
+   */
+  private static async crawlDelay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
 } 
